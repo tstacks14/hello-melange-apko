@@ -1,0 +1,31 @@
+# ------------------------------------------------------------
+# Single-Stage Build
+# This intentionally uses a traditional approach to demonstrate
+# larger attack surface and security tradeoffs.
+# ------------------------------------------------------------
+
+# Use official Go image (includes full toolchain and OS packages)
+# Larger footprint, compiler remains in runtime image
+FROM golang:1.22
+
+# Set working directory inside container
+WORKDIR /app
+
+# Copy entire application source into container
+# NOTE: Without a .dockerignore this may include unnecessary files
+COPY . .
+
+# Ensure dependencies are resolved
+# In production, deterministic builds should avoid modifying go.mod
+RUN go mod tidy
+
+# Compile the application binary
+# Compiler remains in final image (increases attack surface)
+RUN go build -o app
+
+# Document the port the application listens on
+EXPOSE 8080
+
+# Run the compiled application
+# Runs as root by default (security risk)
+CMD ["./app"]

@@ -1,0 +1,49 @@
+# ------------------------------------------------------------
+# Multi-Stage Build
+# Designed to reduce attack surface and follow container
+# security best practices.
+# ------------------------------------------------------------
+
+# -------- Builder Stage --------
+# Use lightweight Alpine-based Go image for compilation
+# Builder stage will NOT exist in final image
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Copy dependency manifests first to leverage Docker layer caching
+# This prevents unnecessary dependency re-downloads on code changes
+COPY go.mod go.sum ./
+
+# Download dependencies in a deterministic way
+RUN go mod download
+
+# Copy application source
+COPY . .
+
+# Build statically linked binary
+# - CGO disabled reduces OS dependency surface
+# - GOOS/GOARCH ensures consistent Linux build target
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o app
+
+# -------- Runtime Stage --------
+# Minimal Alpine runtime image (no compiler, smaller footprint)
+FROM alpine:3.19
+
+# Create non-root user to follow least privilege principle
+RUN adduser -D appuser
+
+WORKDIR /app
+
+# Copy only the compiled binary from builder stage
+# No source code or build tools included
+COPY --from=builder /app/app .
+
+# Drop privileges before running application
+USER appuser
+
+# Document listening port
+EXPOSE 8080
+
+# Run the application binary
+CMD ["./app"]
